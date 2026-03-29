@@ -19,12 +19,30 @@ const HOST = "0.0.0.0";
 // ================= Middleware =================
 app.use(express.json());
 
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || "https://hwa-frontend.vercel.app/",
-  credentials: true,
-};
-app.use(cors(corsOptions));
+// ✅ ✅ FIXED CORS CONFIGURATION
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://hwa-frontend.vercel.app"
+];
 
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like Postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed: " + origin));
+    }
+  },
+  credentials: true
+}));
+
+// Optional: preflight support
+app.options("*", cors());
+
+// ================= Security & Logs =================
 app.use(helmet());
 app.use(morgan("dev"));
 
@@ -61,20 +79,22 @@ const syncOptions = {
   alter: process.env.NODE_ENV === "production" ? false : true,
 };
 
-sequelize.sync(syncOptions).then(() => {
-  console.log("✅ All models synced successfully");
+sequelize.sync(syncOptions)
+  .then(() => {
+    console.log("✅ All models synced successfully");
 
-  app.listen(PORT, HOST, () => {
-    console.log(`🚀 Server running on ${HOST}:${PORT}`);
-  });
-}).catch(err => {
-  console.error("❌ DB sync failed:", err.message);
+    app.listen(PORT, HOST, () => {
+      console.log(`🚀 Server running on ${HOST}:${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error("❌ DB sync failed:", err.message);
 
-  // Even if DB fails, server should still run
-  app.listen(PORT, HOST, () => {
-    console.log(`⚠️ Server running WITHOUT DB on ${HOST}:${PORT}`);
+    // Even if DB fails, server should still run
+    app.listen(PORT, HOST, () => {
+      console.log(`⚠️ Server running WITHOUT DB on ${HOST}:${PORT}`);
+    });
   });
-});
 
 // ================= Global Error =================
 process.on("uncaughtException", (err) => {
