@@ -4,16 +4,20 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
+const path = require("path");
 
 const { sequelize } = require("./models");
 const errorHandler = require("./middleware/error.middleware");
+
+// ✅ Import setup.js for seeding
+const setupDatabase = require("./setup");
 
 const app = express();
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
 
-// ================= CORS FIX =================
+// ================= CORS =================
 const allowedOrigins = [
   "https://hwa-frontend.vercel.app",
   "https://hwa-frontend-git-main-alamgir2270s-projects.vercel.app"
@@ -21,14 +25,8 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // allow requests without origin (Postman, Render health check)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // ❗ DO NOT throw error (prevents Render crash)
+    if (!origin) return callback(null, true); // Postman, Render health check
+    if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(null, false);
   },
   credentials: true,
@@ -47,7 +45,6 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // ================= STATIC FILES =================
-const path = require("path");
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ================= ROUTES =================
@@ -69,24 +66,34 @@ app.get("/", (req, res) => {
   res.send("Backend is running!");
 });
 
+// ================= SEED ROUTE (PRODUCTION SAFE) =================
+// 🔐 Use secret key for safety
+app.get("/seed", async (req, res) => {
+  try {
+    if (req.query.key !== process.env.SEED_KEY) {
+      return res.status(403).send("❌ Forbidden: Invalid key");
+    }
+
+    await setupDatabase();
+    res.send("✅ Database seeded successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("❌ Error seeding database");
+  }
+});
+
 // ================= ERROR HANDLER =================
 app.use(errorHandler);
 
 // ================= SERVER START =================
 const PORT = process.env.PORT || 5000;
+const syncOptions = { alter: process.env.NODE_ENV === "production" ? false : true };
 
-const syncOptions = {
-  alter: process.env.NODE_ENV === "production" ? false : true,
-};
-
-console.log(
-  `Database sync options: ${JSON.stringify(syncOptions)}`
-);
+console.log(`Database sync options: ${JSON.stringify(syncOptions)}`);
 
 sequelize.sync(syncOptions).then(() => {
-  console.log("All models synced successfully");
-
   const HOST = process.env.HOST || "0.0.0.0";
+  console.log("All models synced successfully");
 
   app.listen(PORT, HOST, () => {
     console.log(`Server running on ${HOST}:${PORT}`);
