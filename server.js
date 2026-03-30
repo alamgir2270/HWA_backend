@@ -14,12 +14,26 @@ const app = express();
 app.use(express.json());
 
 // CORS Configuration - allow both localhost and production URLs
+const allowedOrigins = [
+  "https://hwa-frontend.vercel.app",
+  "https://hwa-frontend-git-main-alamgir2270s-projects.vercel.app"
+];
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'https://hwa-frontend.vercel.app',
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
-  optionsSuccessStatus: 200,
 };
+
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(helmet());
 app.use(morgan("dev"));
